@@ -11,7 +11,7 @@
 
 const express = require("express");
 const path = require("path");
-const collegeData = require("C:/Users/phgoj/OneDrive/Desktop/Web700_S2023/web700_Summer2023/assignment4/modules/collegeData");
+const collegeData = require("./modules/collegeData");
 
 const app = express();
 const HTTP_PORT = process.env.PORT || 8080;
