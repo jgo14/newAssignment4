@@ -1,10 +1,10 @@
 /*********************************************************************************
-*  WEB700 – Assignment 03
+*  WEB700 – Assignment 05
 *  I declare that this assignment is my own work in accordance with Seneca  Academic Policy.  No part 
 *  of this assignment has been copied manually or electronically from any other source 
 *  (including 3rd party web sites) or distributed to other students.
 * 
-*  Name: Jason Go Student ID: 128693223 Date: July 10, 2023
+*  Name: Jason Go Student ID: 128693223 Date: July 22, 2023
 *
 ********************************************************************************/ 
 
@@ -12,119 +12,150 @@
 const express = require("express");
 const path = require("path");
 const collegeData = require("./modules/collegeData");
-
 const app = express();
+const exphbs = require('express-handlebars');
+app.use(express.urlencoded({extended: true}));
+
+
 const HTTP_PORT = process.env.PORT || 8080;
 
-// Middleware to parse URL-encoded bodies
-app.use(express.urlencoded({ extended: true }));
+//handle bars
 
-// Middleware to serve static files
-app.use(express.static(path.join(__dirname, "public")));
+app.engine('hbs', exphbs.engine({ extname: '.hbs', defaultLayout: path.join(__dirname, 'views/layouts/main') }));
+app.set('view engine', 'hbs');
 
-// Route to handle root URL
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "views", "home.html"));
-});
 
-// Route to handle /students
-app.get("/students", (req, res) => {
-  collegeData.getAllStudents()
-    .then((students) => {
-      // Check for optional query parameter "course"
-      const course = req.query.course;
-      if (course) {
-        collegeData.getStudentsByCourse(course)
-          .then((studentsByCourse) => {
-            res.json(studentsByCourse);
-          })
-          .catch(() => {
-            res.status(404).json({ message: "No results returned" });
-          });
-      } else {
-        res.json(students);
+app.use(function(req, res, next) {
+    let route = req.path.substring(1);
+    app.locals.activeRoute = "/" + (isNaN(route.split('/')[1]) ? route.replace(/\/(?!.*)/, "") : route.replace(/\/(.*)/, ""));
+    next();
+  });
+
+const hbs = exphbs.create({
+    helpers: {
+      navLink: function(url, options) {
+        return '<li' + ((url == app.locals.activeRoute) ? ' class="nav-item active" ' : ' class="nav-item" ') +
+               '><a class="nav-link" href="' + url + '">' + options.fn(this) + '</a></li>';
+      },
+      // Define the 'equal' helper here as well (already provided in the instructions).
+      equal: function(lvalue, rvalue, options) {
+        // ... implementation ...
       }
-    })
-    .catch(() => {
-      res.status(404).json({ message: "No results returned" });
-    });
+    }
 });
 
-// Route to handle /tas
-app.get("/tas", (req, res) => {
-  collegeData.getTAs()
-    .then((tas) => {
-      res.json(tas);
-    })
-    .catch(() => {
-      res.status(404).json({ message: "No results returned" });
-    });
-});
+  
+app.engine('hbs', hbs.engine);  
 
-// Route to handle /courses
-app.get("/courses", (req, res) => {
-  collegeData.getCourses()
-    .then((courses) => {
-      res.json(courses);
-    })
-    .catch(() => {
-      res.status(404).json({ message: "No results returned" });
-    });
-});
-
-// Route to handle /student/:num
-app.get("/student/:num", (req, res) => {
-  const num = req.params.num;
-  collegeData.getStudentByNum(num)
-    .then((student) => {
-      res.json(student);
-    })
-    .catch(() => {
-      res.status(404).json({ message: "No results returned" });
-    });
-});
-
-// Route to handle about page
-app.get("/about", (req, res) => {
-  res.sendFile(path.join(__dirname, "views", "about.html"));
-});
-
-// Route to handle HTML demo page
-app.get("/htmlDemo", (req, res) => {
-  res.sendFile(path.join(__dirname, "views", "htmlDemo.html"));
-});
-
-// Route to handle /students/add
-app.get("/students/add", (req, res) => {
-  res.sendFile(path.join(__dirname, "views", "addStudent.html"));
-});
-
-// Route to handle form submission for adding a student (Step 5)
-app.post("/students/add", (req, res) => {
-  const studentData = req.body;
-  collegeData.addStudent(studentData)
+collegeData.initialize()
     .then(() => {
-      res.redirect("/students");
+        app.get('/', (req, res) => {
+            res.render('home');
+          });
+        
+        app.get('/students', (req, res) => {
+            collegeData.getAllStudents()
+              .then((data) => {
+                res.render('students', { students: data });
+              })
+              .catch((err) => {
+                res.render('students', { message: "no results" });
+              });
+          });
+
+        app.get('/students/add', (req, res) => {
+            res.render('addStudent');
+          });
+
+        app.post("/students/add", (req, res)=>{
+            collegeData.addStudent(req.body)
+            .then(()=>{
+                res.redirect("/students")
+            })
+            .catch((error)=>{
+                console.error(error)
+                res.redirect('ERROR' + error);
+            })
+        })
+        app.post("/students/update", (req, res) => {
+          collegeData
+            .updateStudent({ studentNum: parseInt(req.body.studentNum), ...req.body })
+            .then((updatedStudent) => {
+              res.redirect("/students");
+            })
+            .catch((error) => {
+              console.error(error);
+              res.redirect("/students");
+            });
+        });
+        
+        app.get("/tas", (req, res) => {
+            collegeData.getTAs()
+                .then((tas) => {
+                    res.json(tas);
+                })
+                .catch((error) => {
+                    res.status(404).json({ message: "no results" });
+                });
+        });
+        
+        app.get('/courses', (req, res) => {
+            collegeData.getCourses()
+              .then((data) => {
+                res.render('courses', { courses: data });
+              })
+              .catch((err) => {
+                res.render('courses', { message: "no results" });
+              });
+        });
+
+        app.get('/courses/:id', (req, res) => {
+            const courseId = req.params.id;
+            collegeData.getCourseById(courseId)
+              .then((course) => {
+                res.render('course', { course });
+              })
+              .catch((err) => {
+                res.render('course', { message: "no results" });
+              });
+        });
+          
+        
+        app.get('/students/:studentNum', (req, res) => {
+            const studentNum = parseInt(req.params.studentNum);
+        
+            collegeData.getStudentByNum(studentNum)
+                .then((student) => {
+                    res.render('student', { student });
+                })
+                .catch((err) => {
+                    res.render('student', { message: "no results" });
+                });
+        });
+        
+        
+        app.get('/about', (req, res) => {
+            res.render('about');
+          });
+        
+        app.get('/htmlDemo', (req, res) => {
+            res.render('htmlDemo');
+        });
+
+        app.get("/theme.css", (req, res) => {
+          res.sendFile(path.join(__dirname, "/css/theme.css"));
+        });
+        
+        app.use((req, res) => {
+            res.status(404).send("Page Not Found");
+        });
+
+
+        app.listen(HTTP_PORT, () => {
+            console.log("Server listening on port: " + HTTP_PORT);
+        });
     })
     .catch((error) => {
-      console.error("Error adding student:", error);
-      res.status(500).send("Error adding student");
+        console.error(error);
     });
-});
-
-// Route to handle unmatched routes
-app.use((req, res) => {
-  res.status(404).send("Page Not Found");
-});
-
-// Initialize collegeData and start the server
-collegeData.initialize()
-  .then(() => {
-    app.listen(HTTP_PORT, () => {
-      console.log("Server listening on port:", HTTP_PORT);
-    });
-  })
-  .catch((err) => {
-    console.error("Error initializing collegeData:", err);
-  });
 
